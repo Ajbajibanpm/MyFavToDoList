@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RPG Task Manager - Monster Edition</title>
+    <title>RPG Task Manager - Dispensa Mostri</title>
     <style>
         :root { --primary: #2563eb; --warning: #f59e0b; --danger: #ef4444; --success: #10b981; --bg: #f1f5f9; --text: #1e293b; --recur: #8b5cf6; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -47,9 +47,10 @@
 
         /* Capture Modal */
         .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:none; flex-direction:column; justify-content:center; align-items:center; z-index:2000; }
-        .capture-scene { width: 300px; height: 400px; background: #2c3e50; border-radius: 20px; position: relative; overflow: hidden; border: 3px solid white; }
-        #pokemon-sprite { position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); width: 160px; transition: all 0.4s; }
-        #pokeball { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 60px; cursor: pointer; }
+        .capture-scene { width: 300px; height: 400px; background: #000; border-radius: 20px; position: relative; overflow: hidden; border: 3px solid white; }
+        #camera-feed { width: 100%; height: 100%; object-fit: cover; }
+        #pokemon-sprite { position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); width: 150px; transition: all 0.4s; z-index: 5; }
+        #pokeball { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 55px; cursor: pointer; z-index: 10; }
         .throwing { animation: throw 0.6s forwards; }
         @keyframes throw { 0% { bottom: 30px; transform: translateX(-50%) scale(1); } 100% { bottom: 55%; transform: translateX(-50%) scale(0.4) rotate(720deg); } }
         
@@ -67,9 +68,9 @@
             <div class="stat-count" id="countToday">Fatte: 0</div>
         </div>
         <div class="stat-box">
-            <span style="font-size:0.65em; opacity:0.8">MOSTRI</span>
+            <span style="font-size:0.65em; opacity:0.8">MOSTRO-PEDIA</span>
             <span class="stat-value" id="pokeStats">0/25</span>
-            <div class="stat-count">Collezione</div>
+            <div class="stat-count">Esemplari totali</div>
         </div>
     </div>
 
@@ -101,7 +102,7 @@
                     <option value="Pomeriggio">Pomeriggio</option>
                     <option value="Sera">Sera</option>
                 </select>
-                <label style="font-size:0.75em; white-space:nowrap;"><input type="checkbox" id="isRec"> Salva Modello</label>
+                <label style="font-size:0.75em; white-space:nowrap;"><input type="checkbox" id="isRec"> Modello</label>
             </div>
             <div id="datePreview" style="font-size:0.75em; color:var(--primary); font-weight:bold; text-align:center; min-height: 1.2em;"></div>
             <button class="main" onclick="addTask()">AGGIUNGI TASK</button>
@@ -114,35 +115,39 @@
     <div class="section-title">Programmi Ricorrenti (∞)</div>
     <div id="recurList"></div>
 
-    <div class="section-title">Mostropedia</div>
+    <div class="section-title">Mostro-pedia</div>
     <div class="pokedex-grid" id="pokedex"></div>
 </div>
 
 <div id="graceModal" class="modal-overlay" style="background:rgba(0,0,0,0.85); display:none;">
     <div style="background:white; padding:25px; border-radius:20px; width:90%; max-width:400px; text-align:center;">
         <h2 style="margin-top:0;">🚨 Recupero!</h2>
+        <p style="font-size:0.85em; color:#64748b;">Seleziona quelle che hai completato in tempo. Le altre subiranno una penalità.</p>
         <div id="graceList" style="margin:20px 0;"></div>
-        <button class="main" onclick="closeGraceModal()" style="background:#64748b">Applica Penalità</button>
+        <button class="main" onclick="closeGraceModal()" style="background:#64748b">Applica Penalità alle restanti</button>
     </div>
 </div>
 
 <div id="captureModal" class="modal-overlay">
-    <div style="color:white; margin-bottom:10px; font-weight:bold;">APPARE UN MOSTRO!</div>
+    <div style="color:white; margin-bottom:10px; font-weight:bold; text-shadow: 0 2px 4px black;">APPARE UN MOSTRO!</div>
     <div class="capture-scene">
+        <video id="camera-feed" autoplay playsinline></video>
         <img id="pokemon-sprite" src="">
         <img id="pokeball" src="https://upload.wikimedia.org/wikipedia/commons/5/53/Pok%C3%A9_Ball_icon.svg" onclick="executeCapture()">
     </div>
-    <div id="capture-msg" style="color:white; margin-top:20px; font-weight:bold; display:none;"></div>
+    <div id="capture-msg" style="color:white; margin-top:20px; font-weight:bold; text-shadow: 0 2px 4px black; display:none;"></div>
     <button id="btn-done" class="main" style="width:150px; margin-top:15px; display:none;" onclick="finishCapture()">CONTINUA</button>
 </div>
 
 <script>
     const REPO_BASE_URL = "https://raw.githubusercontent.com/Ajbajibanpm/DispensaMostri/main/";
-    
+    const MAX_MOSTRI = 25;
+
     let tasks = JSON.parse(localStorage.getItem('activeTasks')) || [];
     let library = JSON.parse(localStorage.getItem('taskLibrary')) || [];
     let history = JSON.parse(localStorage.getItem('taskHistory')) || [];
-    let caughtPoke = JSON.parse(localStorage.getItem('pokedex_dispensa')) || {};
+    let caughtPoke = JSON.parse(localStorage.getItem('pokedex_v2')) || {};
+    let videoStream = null;
 
     function toggleInf() {
         const isInf = document.getElementById('isInf').checked;
@@ -154,7 +159,7 @@
     function toggleDayBtn(btn) { btn.classList.toggle('active'); }
 
     function updateDatePreview() {
-        if(document.getElementById('isInf').checked) { document.getElementById('datePreview').innerText = "Verrà generata nei giorni scelti"; return; }
+        if(document.getElementById('isInf').checked) { document.getElementById('datePreview').innerText = "Task Ricorrente"; return; }
         const val = document.getElementById('deadlineDays').value;
         if(!val) { document.getElementById('datePreview').innerText = ""; return; }
         const d = new Date(); d.setDate(d.getDate() + parseInt(val));
@@ -192,27 +197,33 @@
             if(idx > -1) library[idx] = libObj; else library.push(libObj);
         }
 
-        if(isInf) {
-            const today = new Date().getDay().toString();
-            if(!recurDays.includes(today)) { if(!cData) resetUI(); saveAndRender(); return; }
+        let d = new Date();
+        if (isInf) {
+            d.setFullYear(2125);
+        } else {
+            const days = parseInt(document.getElementById('deadlineDays').value) || 0;
+            d.setDate(d.getDate() + days);
+            // CORREZIONE: Imposta la scadenza a fine giornata per evitare trigger immediato
+            d.setHours(23, 59, 59, 999);
         }
 
-        let d = new Date();
-        if (isInf) d.setFullYear(2125);
-        else d.setDate(d.getDate() + (cData ? 0 : (parseInt(document.getElementById('deadlineDays').value) || 0)));
-
-        tasks.push({ id: Date.now(), title, points: pts, deadline: d.toISOString(), isInfinite: isInf, graceChecked: false, slot: cData ? cData.slot : document.getElementById('timeSlot').value });
+        tasks.push({ 
+            id: Date.now(), 
+            title, 
+            points: pts, 
+            deadline: d.toISOString(), 
+            isInfinite: isInf, 
+            graceChecked: false, 
+            slot: cData ? cData.slot : document.getElementById('timeSlot').value 
+        });
         
-        if(!cData) resetUI();
+        if(!cData) { 
+            document.getElementById('title').value = ""; 
+            document.getElementById('deadlineDays').value = "";
+            document.getElementById('isInf').checked = false; 
+            toggleInf(); 
+        }
         saveAndRender();
-    }
-
-    function resetUI() {
-        document.getElementById('title').value = ""; 
-        document.getElementById('isInf').checked = false; 
-        document.getElementById('isRec').checked = false;
-        document.querySelectorAll('.day-btn').forEach(b => b.classList.remove('active'));
-        toggleInf();
     }
 
     function calculateDynamicPoints(task) {
@@ -235,16 +246,21 @@
         saveAndRender();
     }
 
-    let currentMostroId = null;
-    function triggerCapture() {
-        currentMostroId = Math.floor(Math.random() * 25) + 1;
-        document.getElementById('pokemon-sprite').src = `${REPO_BASE_URL}${currentMostroId}.png`;
+    let currentPokeId = null;
+    async function triggerCapture() {
+        currentPokeId = Math.floor(Math.random() * MAX_MOSTRI) + 1;
+        document.getElementById('pokemon-sprite').src = `${REPO_BASE_URL}${currentPokeId}.png`;
         document.getElementById('pokemon-sprite').style.opacity = "1";
         document.getElementById('pokeball').classList.remove('throwing');
         document.getElementById('pokeball').style.display = "block";
         document.getElementById('capture-msg').style.display = "none";
         document.getElementById('btn-done').style.display = "none";
         document.getElementById('captureModal').style.display = "flex";
+
+        try {
+            videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            document.getElementById('camera-feed').srcObject = videoStream;
+        } catch (e) { console.warn("Camera non accessibile"); }
     }
 
     function executeCapture() {
@@ -253,35 +269,49 @@
         setTimeout(() => {
             document.getElementById('pokemon-sprite').style.opacity = "0";
             const msg = document.getElementById('capture-msg');
-            msg.innerText = `CATTURATO MOSTRO #${currentMostroId}!`;
+            msg.innerText = `CATTURATO MOSTRO #${currentPokeId}!`;
             msg.style.display = "block";
             document.getElementById('btn-done').style.display = "block";
             ball.style.display = "none";
             
-            if(!caughtPoke[currentMostroId]) caughtPoke[currentMostroId] = {count: 0};
-            caughtPoke[currentMostroId].count++;
-            localStorage.setItem('pokedex_dispensa', JSON.stringify(caughtPoke));
+            if(!caughtPoke[currentPokeId]) caughtPoke[currentPokeId] = {count: 0};
+            caughtPoke[currentPokeId].count++;
+            localStorage.setItem('pokedex_v2', JSON.stringify(caughtPoke));
         }, 600);
     }
 
-    function finishCapture() { document.getElementById('captureModal').style.display = "none"; saveAndRender(); }
+    function finishCapture() {
+        if(videoStream) videoStream.getTracks().forEach(track => track.stop());
+        document.getElementById('captureModal').style.display = "none"; 
+        saveAndRender(); 
+    }
 
     function saveAndRender() {
         localStorage.setItem('activeTasks', JSON.stringify(tasks));
         localStorage.setItem('taskLibrary', JSON.stringify(library));
-        
         const taskDiv = document.getElementById('taskList');
         taskDiv.innerHTML = "";
         const now = new Date();
 
+        // LOGICA PENALITA' (Solo se scadute davvero e non ancora controllate)
         const expired = tasks.filter(t => !t.isInfinite && new Date(t.deadline) < now && !t.graceChecked);
+        
         if(expired.length > 0) {
-            document.getElementById('graceList').innerHTML = expired.map(t => `<div class="row" style="justify-content:space-between; margin-bottom:10px; background:#f8fafc; padding:10px; border-radius:10px; border:1px solid #e2e8f0;"><strong>${t.title}</strong><button class="btn-check" onclick="completeTask(${t.id}, true)" style="width:30px; height:30px">✓</button></div>`).join('');
+            document.getElementById('graceList').innerHTML = expired.map(t => `
+                <div class="row" style="justify-content:space-between; margin-bottom:10px; background:#f8fafc; padding:10px; border-radius:10px; border:1px solid #e2e8f0;">
+                    <div style="text-align:left">
+                        <strong>${t.title}</strong><br>
+                        <span style="font-size:0.7em; color:var(--danger)">Scaduta il ${new Date(t.deadline).toLocaleDateString()}</span>
+                    </div>
+                    <button class="btn-check" onclick="completeTask(${t.id}, true)" style="width:35px; height:35px">✓</button>
+                </div>
+            `).join('');
             document.getElementById('graceModal').style.display = 'flex';
+            // Segnamo che sono state mostrate
             expired.forEach(t => t.graceChecked = true);
         }
 
-        tasks.sort((a,b) => new Date(a.deadline) - new Date(b.deadline)).forEach(t => {
+        tasks.forEach(t => {
             const isExp = now > new Date(t.deadline) && !t.isInfinite;
             const div = document.createElement('div');
             div.className = `task-item ${t.isInfinite?'infinite':''} ${isExp?'expired':''}`;
@@ -294,10 +324,9 @@
         const recurDiv = document.getElementById('recurList');
         recurDiv.innerHTML = "";
         library.filter(l => l.isInfinite).forEach(l => {
-            const daysMap = ["D", "L", "M", "M", "G", "V", "S"];
             const div = document.createElement('div');
             div.className = 'recur-item';
-            div.innerHTML = `<div><strong style="color:var(--recur)">${l.title}</strong><br><span style="font-size:0.75em; color:#64748b">Frequenza: ${l.recur.map(d => daysMap[d]).join(', ')}</span></div>
+            div.innerHTML = `<div><strong style="color:var(--recur)">${l.title}</strong><br><span style="font-size:0.75em; color:#64748b">Frequenza: ${l.recur.join(', ')}</span></div>
                 <button class="btn-circle btn-del" onclick="deleteLibraryItem('${l.title}')">×</button>`;
             recurDiv.appendChild(div);
         });
@@ -310,20 +339,21 @@
         const pDiv = document.getElementById('pokedex');
         pDiv.innerHTML = "";
         let found = 0;
-        for(let i=1; i<=25; i++) {
+        for(let i=1; i<=MAX_MOSTRI; i++) {
             const data = caughtPoke[i];
             const div = document.createElement('div');
             div.className = 'poke-slot';
+            const label = data ? `Mostro #${i}` : `???`;
             div.innerHTML = `<img src="${REPO_BASE_URL}${i}.png" class="poke-img ${data?'found':''}">
-                <br><strong>${data?'Mostro #'+i:'???'}</strong><br><span style="font-size:0.8em">Catturati: ${data?data.count:0}</span>`;
+                <br><strong>${label}</strong><br><span style="font-size:0.8em">Visti: ${data?data.count:0}</span>`;
             if(data) found++;
             pDiv.appendChild(div);
         }
-        document.getElementById('pokeStats').innerText = `${found}/25`;
+        document.getElementById('pokeStats').innerText = `${found}/${MAX_MOSTRI}`;
     }
 
     function deleteTask(id) { tasks = tasks.filter(x => x.id !== id); saveAndRender(); }
-    function deleteLibraryItem(title) { if(confirm(`Eliminare il programma "${title}"?`)) { library = library.filter(l => l.title !== title); saveAndRender(); } }
+    function deleteLibraryItem(title) { if(confirm("Eliminare modello?")) { library = library.filter(l => l.title !== title); saveAndRender(); } }
     function closeGraceModal() { document.getElementById('graceModal').style.display = 'none'; saveAndRender(); }
     function updateStats() {
         const today = new Date().toDateString();
